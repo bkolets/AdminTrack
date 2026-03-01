@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SlackMaxDetails__c</fullName>
+    <label>Slack Max Detail Lines</label>
+    <type>Number</type>
+    <precision>3</precision>
+    <scale>0</scale>
+    <defaultValue>25</defaultValue>
+    <description>Number of changes to include per Slack message. If a batch run exceeds this, additional Slack messages are sent automatically (up to 50 per run). Only applies to the default message format.</description>
+</CustomField>

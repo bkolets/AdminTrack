@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SlackWebhookUrl__c</fullName>
+    <label>Slack Webhook URL</label>
+    <type>Url</type>
+    <externalId>false</externalId>
+    <description>Slack Incoming Webhook URL. Must start with https://hooks.slack.com/</description>
+</CustomField>

@@ -1,0 +1,341 @@
+<template>
+    <lightning-card title="AdminTrack" icon-name="utility:record_alt">
+        <div class="slds-m-around_medium">
+
+            <!-- Error Banner -->
+            <template lwc:if={error}>
+                <div class="slds-notify slds-notify_alert slds-alert_error slds-m-bottom_medium" role="alert">
+                    <span class="slds-assistive-text">error</span>
+                    <lightning-icon icon-name="utility:error" alternative-text="Error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                    <p>{errorMessage}</p>
+                </div>
+            </template>
+
+            <!-- Success Banner -->
+            <template lwc:if={successMessage}>
+                <div class="slds-notify slds-notify_alert slds-alert_success slds-m-bottom_medium" role="status">
+                    <span class="slds-assistive-text">success</span>
+                    <lightning-icon icon-name="utility:success" alternative-text="Success" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                    <p>{successMessage}</p>
+                </div>
+            </template>
+
+            <lightning-tabset>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- TAB 1: AUDIT LOG                                            -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <lightning-tab label="Audit Trail" onactive={handleLogTabActive}>
+
+                    <!-- Row 1: Date Range + custom date inputs + Apply (custom only) -->
+                    <div class="slds-grid slds-gutters slds-m-bottom_small" style="align-items: flex-end;">
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-combobox
+                                label="Date Range"
+                                value={logDateRange}
+                                options={dateRangeOptions}
+                                onchange={handleDateRangeChange}
+                            ></lightning-combobox>
+                        </div>
+                        <template lwc:if={isCustomDateRange}>
+                            <div class="slds-col slds-size_1-of-4">
+                                <lightning-input
+                                    type="date"
+                                    label="From"
+                                    value={customStartDate}
+                                    onchange={handleCustomStartDate}
+                                ></lightning-input>
+                            </div>
+                            <div class="slds-col slds-size_1-of-4">
+                                <lightning-input
+                                    type="date"
+                                    label="To (optional)"
+                                    value={customEndDate}
+                                    onchange={handleCustomEndDate}
+                                ></lightning-input>
+                            </div>
+                            <div class="slds-col slds-size_1-of-4" style="padding-top: 1.5rem;">
+                                <lightning-button
+                                    label="Apply"
+                                    variant="brand"
+                                    onclick={handleApplyFilters}
+                                    disabled={isApplyDisabled}
+                                ></lightning-button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Row 2: Section / User -->
+                    <div class="slds-grid slds-gutters slds-m-bottom_small" style="align-items: flex-end;">
+                        <div class="slds-col slds-size_1-of-2">
+                            <lightning-combobox
+                                label="Section"
+                                value={sectionFilter}
+                                options={sectionPicklistOptions}
+                                onchange={handleSectionFilterChange}
+                            ></lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2">
+                            <lightning-record-picker
+                                label="User"
+                                placeholder="Search users..."
+                                object-api-name="User"
+                                value={userFilter}
+                                onchange={handleUserSelect}
+                            ></lightning-record-picker>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Client-side Search + Reload -->
+                    <div class="slds-grid slds-gutters slds-m-bottom_small" style="align-items: flex-end;">
+                        <div class="slds-col slds-size_3-of-4">
+                            <lightning-input
+                                type="search"
+                                label="Search"
+                                placeholder="Filter by action, section, user, or details…"
+                                value={logSearchTerm}
+                                onchange={handleLogSearch}
+                            ></lightning-input>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-button
+                                label="Reload"
+                                variant="neutral"
+                                icon-name="utility:refresh"
+                                onclick={handleReloadLogs}
+                            ></lightning-button>
+                        </div>
+                    </div>
+
+                    <!-- Spinner or results -->
+                    <template lwc:if={isLoadingLogs}>
+                        <lightning-spinner alternative-text="Loading audit log..." size="medium"></lightning-spinner>
+                    </template>
+
+                    <template lwc:else>
+                        <!-- Count label -->
+                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">{logCountLabel}</p>
+
+                        <!-- Table -->
+                        <template lwc:if={hasFilteredLogs}>
+                            <lightning-datatable
+                                key-field="Id"
+                                data={filteredLogs}
+                                columns={logColumns}
+                                hide-checkbox-column
+                            ></lightning-datatable>
+                        </template>
+                        <template lwc:else>
+                            <p class="slds-text-color_weak slds-text-body_small">No records match your search.</p>
+                        </template>
+                    </template>
+
+                </lightning-tab>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- TAB 2: STATUS                                               -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <lightning-tab label="Status">
+
+                    <!-- Scheduler Status -->
+                    <div class="slds-box slds-theme_shade slds-m-bottom_medium">
+                        <h2 class="slds-text-heading_small slds-m-bottom_small">Scheduler Status</h2>
+
+                        <template lwc:if={isLoading}>
+                            <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                        </template>
+
+                        <template lwc:else>
+                            <div class="slds-grid slds-gutters slds-wrap">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <p>
+                                        <strong>Status: </strong>
+                                        <template lwc:if={jobStatus.isActive}>
+                                            <lightning-badge label="Active" class="slds-theme_success"></lightning-badge>
+                                        </template>
+                                        <template lwc:else>
+                                            <lightning-badge label="Inactive"></lightning-badge>
+                                        </template>
+                                    </p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <p><strong>Next Run: </strong><span>{nextRunDisplay}</span></p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-1 slds-m-top_small">
+                                    <p><strong>Interval: </strong><span>{currentIntervalLabel}</span></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Interval Picklist -->
+                    <div class="slds-m-bottom_medium">
+                        <lightning-combobox
+                            label="Poll Interval"
+                            value={intervalMinutes}
+                            options={intervalOptions}
+                            onchange={handleIntervalChange}
+                            required
+                        ></lightning-combobox>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="slds-button-group slds-m-bottom_medium" role="group">
+                        <lightning-button label="Activate"       variant="brand"       onclick={handleActivate}   disabled={isLoading}></lightning-button>
+                        <lightning-button label="Deactivate"     variant="destructive" onclick={handleDeactivate} disabled={isLoading}></lightning-button>
+                        <lightning-button label="Run Now"        variant="neutral"     onclick={handleRunNow}     disabled={isLoading}></lightning-button>
+                        <lightning-button label="Refresh Status" variant="neutral"     onclick={handleRefresh}    disabled={isLoading} icon-name="utility:refresh"></lightning-button>
+                    </div>
+
+                    <!-- Job Monitor -->
+                    <div class="slds-box slds-m-top_medium">
+                        <h2 class="slds-text-heading_small slds-m-bottom_small">Job Monitor</h2>
+
+                        <h3 class="slds-text-title slds-m-bottom_x-small">Scheduled (Upcoming Runs)</h3>
+                        <template lwc:if={hasScheduledJobs}>
+                            <lightning-datatable
+                                key-field="id"
+                                data={scheduledJobs}
+                                columns={scheduledJobColumns}
+                                hide-checkbox-column
+                                class="slds-m-bottom_medium"
+                            ></lightning-datatable>
+                        </template>
+                        <template lwc:else>
+                            <p class="slds-text-color_weak slds-text-body_small slds-m-bottom_medium">No scheduled jobs found.</p>
+                        </template>
+
+                        <h3 class="slds-text-title slds-m-bottom_x-small">Recent Processor Runs</h3>
+                        <template lwc:if={hasProcessorRuns}>
+                            <lightning-datatable
+                                key-field="id"
+                                data={processorRuns}
+                                columns={processorRunColumns}
+                                hide-checkbox-column
+                            ></lightning-datatable>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">{processorRunTotalLabel}</p>
+                        </template>
+                        <template lwc:else>
+                            <p class="slds-text-color_weak slds-text-body_small">No processor runs found. Click Run Now or activate the scheduler to generate audit log records.</p>
+                        </template>
+                    </div>
+
+                    <!-- Exclusion Rules -->
+                    <div class="slds-box slds-m-top_medium">
+                        <h2 class="slds-text-heading_small slds-m-bottom_small">Exclusion Rules</h2>
+                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_medium">
+                            Audit trail entries matching an active rule are silently skipped — not stored or sent to Slack.
+                        </p>
+
+                        <div class="slds-grid slds-gutters slds-m-bottom_medium" style="align-items: flex-end;">
+                            <div class="slds-col slds-size_1-of-4">
+                                <lightning-combobox
+                                    label="Type"
+                                    value={newExclusionType}
+                                    options={exclusionTypeOptions}
+                                    onchange={handleNewTypeChange}
+                                ></lightning-combobox>
+                            </div>
+                            <div class="slds-col slds-size_2-of-4">
+                                <lightning-input
+                                    label="Value"
+                                    value={newExclusionValue}
+                                    placeholder={newValuePlaceholder}
+                                    onchange={handleNewValueChange}
+                                ></lightning-input>
+                            </div>
+                            <div class="slds-col slds-size_1-of-4">
+                                <lightning-button
+                                    label="Add Rule"
+                                    variant="brand"
+                                    onclick={handleAddExclusion}
+                                    disabled={isAddDisabled}
+                                ></lightning-button>
+                            </div>
+                        </div>
+
+                        <template lwc:if={hasExclusions}>
+                            <lightning-datatable
+                                key-field="Id"
+                                data={exclusions}
+                                columns={exclusionColumns}
+                                onrowaction={handleExclusionRowAction}
+                                hide-checkbox-column
+                            ></lightning-datatable>
+                        </template>
+                        <template lwc:else>
+                            <p class="slds-text-color_weak slds-text-body_small">No exclusion rules defined. All audit trail entries will be tracked.</p>
+                        </template>
+                    </div>
+
+                    <!-- Slack Configuration -->
+                    <div class="slds-box slds-m-top_medium">
+                        <h2 class="slds-text-heading_small slds-m-bottom_medium">Slack Configuration</h2>
+
+                        <div class="slds-m-bottom_medium">
+                            <lightning-input
+                                type="toggle"
+                                label="Send Slack Notifications"
+                                checked={slackEnabled}
+                                onchange={handleSlackEnabledChange}
+                            ></lightning-input>
+                        </div>
+
+                        <template lwc:if={slackEnabled}>
+                            <div class="slds-m-bottom_medium">
+                                <lightning-input
+                                    label="Webhook URL"
+                                    value={slackWebhookUrl}
+                                    placeholder="https://hooks.slack.com/services/..."
+                                    onchange={handleWebhookUrlChange}
+                                ></lightning-input>
+                            </div>
+                            <div class="slds-m-bottom_medium">
+                                <lightning-input
+                                    type="number"
+                                    label="Changes per Slack Message"
+                                    value={slackMaxDetails}
+                                    min="1"
+                                    max="2000"
+                                    step="1"
+                                    onchange={handleSlackMaxDetailsChange}
+                                    field-level-help="How many changes to include per Slack message. If a batch run exceeds this, additional messages are sent automatically (up to 50 messages per run). Only applies to the default message format."
+                                ></lightning-input>
+                            </div>
+                        </template>
+
+                        <div class="slds-m-bottom_medium">
+                            <lightning-textarea
+                                label="Message Template (optional)"
+                                value={slackMessageTemplate}
+                                placeholder="Leave blank to use the default message format."
+                                max-length="32768"
+                                onchange={handleTemplateChange}
+                            ></lightning-textarea>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">{tokenHelpText}</p>
+                        </div>
+
+                        <lightning-button
+                            label="Save Slack Settings"
+                            variant="brand"
+                            onclick={handleSaveSlackSettings}
+                            disabled={isSavingSlack}
+                        ></lightning-button>
+                    </div>
+
+                    <!-- Quick Links -->
+                    <div class="slds-box slds-theme_default slds-m-top_medium">
+                        <h3 class="slds-text-heading_small slds-m-bottom_small">Quick Links</h3>
+                        <ul class="slds-list_dotted">
+                            <li><a href="/lightning/setup/CustomSettings/home" target="_blank">Configure Settings (AdminTrackSettings__c)</a></li>
+                            <li><a href="/lightning/o/AdminAuditLog__c/list" target="_blank">View Audit Log Records (Full List View)</a></li>
+                        </ul>
+                    </div>
+
+                </lightning-tab>
+
+            </lightning-tabset>
+
+        </div>
+    </lightning-card>
+</template>

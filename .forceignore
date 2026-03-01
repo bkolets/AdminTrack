@@ -1,0 +1,7 @@
+# Ignore these files when deploying/retrieving
+.forceignore
+.gitignore
+.git/
+.sfdx/
+.sf/
+node_modules/

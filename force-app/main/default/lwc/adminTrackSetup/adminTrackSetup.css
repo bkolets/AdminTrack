@@ -1,0 +1,26 @@
+:host {
+    display: block;
+}
+
+.slds-theme_success {
+    background-color: #2e844a;
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+.slds-alert_error {
+    background-color: #ba0517;
+    border-color: #ba0517;
+    color: #ffffff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+}
+
+.slds-alert_success {
+    background-color: #2e844a;
+    border-color: #2e844a;
+    color: #ffffff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+}

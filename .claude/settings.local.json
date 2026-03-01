@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sf project:*)",
+      "Bash(tail:*)",
+      "Bash(grep Fail:*)",
+      "Bash(grep:*)",
+      "Bash(brew install:*)"
+    ]
+  }
+}

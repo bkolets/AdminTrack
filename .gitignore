@@ -1,0 +1,19 @@
+# SFDX / Salesforce
+.sfdx/
+.sf/
+*.zip
+
+# Node / tooling
+node_modules/
+.node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Scratch org auth (never commit credentials)
+authInfo/

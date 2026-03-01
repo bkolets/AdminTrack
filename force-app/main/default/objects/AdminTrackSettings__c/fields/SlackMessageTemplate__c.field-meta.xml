@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SlackMessageTemplate__c</fullName>
+    <label>Slack Message Template</label>
+    <type>TextArea</type>
+    <externalId>false</externalId>
+    <description>Customizable Slack message format. Supports {count}, {orgName}, {timestamp} tokens</description>
+</CustomField>

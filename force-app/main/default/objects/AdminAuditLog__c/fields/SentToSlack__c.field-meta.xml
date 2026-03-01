@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SentToSlack__c</fullName>
+    <label>Sent to Slack</label>
+    <type>Checkbox</type>
+    <defaultValue>false</defaultValue>
+    <externalId>false</externalId>
+    <description>Whether a Slack notification was sent for this audit entry</description>
+</CustomField>
