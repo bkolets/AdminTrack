@@ -2,7 +2,7 @@ services:
   - type: web
     name: admintrack-landing
     runtime: static
-    staticPublishPath: .
+    staticPublishPath: website
     headers:
       - path: /*
         name: X-Frame-Options
