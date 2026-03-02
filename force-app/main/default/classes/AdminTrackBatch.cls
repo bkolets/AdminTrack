@@ -7,6 +7,14 @@
  *
  * finish() enqueues AdminTrackProcessor (when IsActive) then re-schedules
  * itself for the next interval.
+ *
+ * SHARING MODEL — declared without sharing for the following reasons:
+ *   1. AdminTrackSettings__c.getInstance() must return the org-level hierarchy
+ *      setting regardless of which user triggered the scheduled run. Declaring
+ *      without sharing ensures the setting is always accessible in the
+ *      scheduler's execution context.
+ *   2. This class performs no DML. All write operations are delegated to
+ *      AdminTrackProcessor, which enforces its own CRUD checks.
  */
 public without sharing class AdminTrackBatch implements Database.Batchable<SObject> {
 

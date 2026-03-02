@@ -2,9 +2,28 @@
  * AdminTrackScheduler_Test
  * Tests AdminTrackScheduler (Schedulable) and AdminTrackSchedulerService.
  * Scheduling now uses Database.scheduleBatch, not System.schedule/CRON.
+ * Includes FLS/CRUD restriction tests to verify that users without the
+ * AdminTrack_Admin permission set cannot modify scheduler settings.
  */
 @IsTest
 private class AdminTrackScheduler_Test {
+
+    private static User createRestrictedUser() {
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User u = new User(
+            Alias             = 'notrack',
+            Email             = 'notrack_sched@testadmintrack.test',
+            EmailEncodingKey  = 'UTF-8',
+            LastName          = 'NoTrackAccess',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey      = 'en_US',
+            ProfileId         = p.Id,
+            TimeZoneSidKey    = 'America/New_York',
+            UserName          = 'notrack_sched@testadmintrack.test'
+        );
+        insert u;
+        return u;
+    }
 
     private class SlackMockSuccess implements HttpCalloutMock {
         public HttpResponse respond(HttpRequest req) {
@@ -246,5 +265,84 @@ private class AdminTrackScheduler_Test {
         Boolean result = AdminTrackSchedulerService.hasPendingJob();
         Test.stopTest();
         System.assertEquals(false, result);
+    }
+
+    // ─── FLS / CRUD restriction tests ───────────────────────────────────────────
+
+    @IsTest
+    static void scheduleJob_restrictedUser_throwsException() {
+        User restricted = createRestrictedUser();
+        Boolean threw = false;
+        Test.startTest();
+        System.runAs(restricted) {
+            try {
+                AdminTrackSchedulerService.scheduleJob(15);
+            } catch (AuraHandledException ex) {
+                threw = true;
+            }
+        }
+        Test.stopTest();
+        System.assert(threw,
+            'scheduleJob should throw AuraHandledException when user lacks access to upsert AdminTrackSettings__c.');
+    }
+
+    @IsTest
+    static void saveSlackSettings_restrictedUser_throwsException() {
+        User restricted = createRestrictedUser();
+        Boolean threw = false;
+        Test.startTest();
+        System.runAs(restricted) {
+            try {
+                AdminTrackSchedulerService.saveSlackSettings(
+                    false, '', '', 25
+                );
+            } catch (AuraHandledException ex) {
+                threw = true;
+            }
+        }
+        Test.stopTest();
+        System.assert(threw,
+            'saveSlackSettings should throw AuraHandledException when user lacks access to upsert AdminTrackSettings__c.');
+    }
+
+    @IsTest
+    static void deactivateJob_restrictedUser_existingSettings_throwsException() {
+        // Create an org-level settings record as admin so getInstance() returns
+        // a non-null Id for any user — hitting the isUpdateable branch of upsertSettings.
+        AdminTrackSettings__c settings = new AdminTrackSettings__c(
+            IsActive__c            = true,
+            PullIntervalMinutes__c = 15
+        );
+        upsert settings;
+
+        // Use a distinct username to avoid collision with createRestrictedUser()
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User restricted = new User(
+            Alias             = 'notrk2',
+            Email             = 'notrack_deact@testadmintrack.test',
+            EmailEncodingKey  = 'UTF-8',
+            LastName          = 'NoTrackAccess2',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey      = 'en_US',
+            ProfileId         = p.Id,
+            TimeZoneSidKey    = 'America/New_York',
+            UserName          = 'notrack_deact@testadmintrack.test'
+        );
+        insert restricted;
+
+        Boolean threw = false;
+        Test.startTest();
+        System.runAs(restricted) {
+            try {
+                // getInstance() returns the org-level record (Id != null),
+                // so upsertSettings checks isUpdateable() — not isCreateable().
+                AdminTrackSchedulerService.deactivateJob();
+            } catch (AuraHandledException ex) {
+                threw = true;
+            }
+        }
+        Test.stopTest();
+        System.assert(threw,
+            'deactivateJob should throw when user lacks update access to AdminTrackSettings__c.');
     }
 }

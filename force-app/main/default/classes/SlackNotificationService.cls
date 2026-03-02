@@ -2,6 +2,26 @@
  * SlackNotificationService
  * Sends one summary Slack notification per batch run via Incoming Webhook.
  * Must be called BEFORE any DML in the same transaction (callout-before-DML rule).
+ *
+ * SECURITY NOTE — Webhook URL Storage:
+ * The Slack Incoming Webhook URL is stored in AdminTrackSettings__c (a Protected
+ * Hierarchy Custom Setting) rather than a Named Credential. This is intentional:
+ *
+ *   - Slack Incoming Webhook URLs are org-specific tokens configured by the admin
+ *     post-installation. Named Credentials require the endpoint to be declared at
+ *     deployment time and do not support user-supplied, token-embedded URLs of
+ *     this form (e.g., https://hooks.slack.com/services/T.../B.../...).
+ *
+ *   - The webhook URL is stored in a Protected Custom Setting, which restricts
+ *     visibility to users with the "Customize Application" permission
+ *     (i.e., org administrators only).
+ *
+ *   - All outbound callouts are restricted to https://hooks.slack.com/ at the
+ *     platform level by the Remote Site Setting (Slack_Hooks), which enforces
+ *     the domain allowlist independently of application logic.
+ *
+ *   - isValidWebhookUrl() validates the URL prefix before every callout,
+ *     ensuring only legitimate Slack endpoints are called.
  */
 public with sharing class SlackNotificationService {
 
@@ -137,9 +157,20 @@ public with sharing class SlackNotificationService {
                 }
             }
 
-            if (isLastPage && truncated) {
-                lines.add('');
-                lines.add('_Message limit reached — see AdminTrack Audit Log for remaining changes._');
+            if (isLastPage) {
+                // When the sample list was capped below totalChanges (e.g., MAX_SAMPLE_CHANGES
+                // limit), note how many additional changes are not shown in the message.
+                if (sampleSize < totalChanges) {
+                    Integer remaining = totalChanges - sampleSize;
+                    lines.add('');
+                    lines.add('_(' + remaining + ' more change'
+                        + (remaining == 1 ? '' : 's')
+                        + ' not shown — view the full log in AdminTrack.)_');
+                }
+                if (truncated) {
+                    lines.add('');
+                    lines.add('_Message limit reached — see AdminTrack Audit Log for remaining changes._');
+                }
             }
 
             payloads.add(JSON.serialize(new Map<String, Object>{ 'text' => String.join(lines, '\n') }));

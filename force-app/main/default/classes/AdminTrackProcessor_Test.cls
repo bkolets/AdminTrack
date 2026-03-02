@@ -143,6 +143,39 @@ private class AdminTrackProcessor_Test {
         }
     }
 
+    // ─── Coverage for "more changes not shown" Slack message path ────────────────
+
+    @IsTest
+    static void buildSlackMessage_sampleSizeLessThanTotal_showsMoreNote() {
+        // Simulates AdminTrackProcessor capping sampleChanges at MAX_SAMPLE_CHANGES
+        // while totalNew is higher — the message should note remaining changes.
+        AdminTrackSettings__c settings = new AdminTrackSettings__c(
+            IsActive__c          = true,
+            SlackEnabled__c      = true,
+            SlackWebhookUrl__c   = 'https://hooks.slack.com/services/T00/B00/abc',
+            LastPullTimestamp__c = DateTime.now()
+        );
+        upsert settings;
+
+        List<Map<String, String>> tenSamples = new List<Map<String, String>>();
+        for (Integer i = 0; i < 10; i++) {
+            tenSamples.add(new Map<String, String>{
+                'section' => 'Section', 'action' => 'Action' + i,
+                'display' => 'Display ' + i, 'date' => String.valueOf(DateTime.now()),
+                'username' => 'user@test.com', 'delegated' => null
+            });
+        }
+
+        // totalChanges=15, but only 10 samples — message should mention 5 more
+        AdminTrackSettings__c cfg = AdminTrackSettings__c.getInstance();
+        String payload = SlackNotificationService.buildSlackMessage(
+            15, 0, DateTime.now().addMinutes(-15), DateTime.now(), tenSamples, cfg
+        );
+
+        System.assert(payload.contains('more'),
+            'Message should note remaining changes when sampleSize < totalChanges');
+    }
+
     @IsTest
     static void execute_withSlackFailure_logRecordReflectsFailure() {
         AdminTrackProcessor.testQueryLimit = 5;

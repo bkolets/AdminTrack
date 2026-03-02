@@ -7,6 +7,17 @@
  * SetupAuditTrail records cannot be serialized across batch transactions, so
  * all processing is done here in a single Queueable transaction where the
  * query and callout both work correctly.
+ *
+ * SHARING MODEL — declared without sharing for the following reasons:
+ *   1. SetupAuditTrail is an org-wide system object representing the complete
+ *      setup history of the org. Its records are not governed by user-level
+ *      sharing rules; querying it requires platform-level access independent
+ *      of the running user's record visibility.
+ *   2. AdminAuditLog__c records represent org-wide audit history, not
+ *      user-owned data. Inserting them under with sharing would incorrectly
+ *      apply sharing rules to what is inherently a system-level operation.
+ *   All DML operations still enforce CRUD permissions via Schema.sObjectType
+ *   checks before executing.
  */
 public without sharing class AdminTrackProcessor implements Queueable, Database.AllowsCallouts {
 
@@ -14,8 +25,9 @@ public without sharing class AdminTrackProcessor implements Queueable, Database.
     private static final Integer MAX_SAMPLE_CHANGES    = 2000;
 
     /**
-     * When set in a test, limits the SetupAuditTrail query to a small number of
-     * records so tests can exercise the full code path without timing issues.
+     * When set in a test, limits the result set (via subList) to a small number
+     * of records so tests can exercise the full code path without timing issues.
+     * Not used in dynamic SOQL — applied in Apex after the query executes.
      */
     @TestVisible
     private static Integer testQueryLimit = null;
@@ -31,18 +43,29 @@ public without sharing class AdminTrackProcessor implements Queueable, Database.
             : DateTime.now().addDays(-DEFAULT_LOOKBACK_DAYS);
         DateTime now = DateTime.now();
 
-        String query =
-            'SELECT Id, Action, Section, CreatedById, CreatedDate, Display, ' +
-            'CreatedBy.Username, DelegateUser ' +
-            'FROM SetupAuditTrail ' +
-            'WHERE CreatedDate > :since ' +
-            'ORDER BY CreatedDate ASC';
+        // Static SOQL with a fixed ceiling — no dynamic string concatenation.
+        // The LIMIT 50000 matches the Apex query row governor limit and prevents
+        // unbounded result sets. In tests, testQueryLimit trims results via subList
+        // after the query, avoiding any dynamic SOQL injection risk.
+        List<SetupAuditTrail> trails = [
+            SELECT Id, Action, Section, CreatedById, CreatedDate, Display,
+                   CreatedBy.Username, DelegateUser
+            FROM SetupAuditTrail
+            WHERE CreatedDate > :since
+            ORDER BY CreatedDate ASC
+            LIMIT 50000
+        ];
 
-        if (testQueryLimit != null) {
-            query += ' LIMIT ' + testQueryLimit;
+        // Trim to testQueryLimit in test context only — safe Apex list operation,
+        // not dynamic SOQL. testQueryLimit is a @TestVisible private static Integer,
+        // not derived from user input.
+        if (testQueryLimit != null && trails.size() > testQueryLimit) {
+            List<SetupAuditTrail> limited = new List<SetupAuditTrail>();
+            for (Integer i = 0; i < testQueryLimit; i++) {
+                limited.add(trails[i]);
+            }
+            trails = limited;
         }
-
-        List<SetupAuditTrail> trails = Database.query(query);
 
         System.debug(LoggingLevel.INFO,
             'AdminTrackProcessor: querying since ' + since + ', found ' + trails.size() + ' entries.');
@@ -78,6 +101,11 @@ public without sharing class AdminTrackProcessor implements Queueable, Database.
                 totalNew, totalExcluded, since, now, sampleChanges
             );
 
+            // CRUD check: verify the running user can insert AdminAuditLog__c.
+            // This requires the AdminTrack_Admin permission set to be assigned.
+            if (!Schema.sObjectType.AdminAuditLog__c.isCreateable()) {
+                throw new System.NoAccessException();
+            }
             insert new AdminAuditLog__c(
                 BatchRunDate__c  = now,
                 WindowStart__c   = since,
@@ -92,6 +120,16 @@ public without sharing class AdminTrackProcessor implements Queueable, Database.
 
         if (settings == null) {
             settings = new AdminTrackSettings__c();
+        }
+        // CRUD check: verify the running user can upsert AdminTrackSettings__c.
+        if (settings.Id == null) {
+            if (!Schema.sObjectType.AdminTrackSettings__c.isCreateable()) {
+                throw new System.NoAccessException();
+            }
+        } else {
+            if (!Schema.sObjectType.AdminTrackSettings__c.isUpdateable()) {
+                throw new System.NoAccessException();
+            }
         }
         settings.LastPullTimestamp__c = now;
         upsert settings;

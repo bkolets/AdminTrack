@@ -4,6 +4,9 @@
  * Uses Database.scheduleBatch (not System.schedule) so sub-hourly minute
  * intervals are fully supported. The batch re-schedules itself in finish().
  * Called from the adminTrackSetup LWC via @AuraEnabled methods.
+ *
+ * All DML operations on AdminTrackSettings__c enforce CRUD permissions before
+ * executing. SOQL results on AdminAuditLog__c are stripped via stripInaccessible.
  */
 public with sharing class AdminTrackSchedulerService {
 
@@ -33,7 +36,7 @@ public with sharing class AdminTrackSchedulerService {
         }
         settings.IsActive__c            = true;
         settings.PullIntervalMinutes__c = intervalMinutes;
-        upsert settings;
+        upsertSettings(settings);
 
         abortExistingJob();
 
@@ -52,7 +55,7 @@ public with sharing class AdminTrackSchedulerService {
             settings = new AdminTrackSettings__c();
         }
         settings.IsActive__c = false;
-        upsert settings;
+        upsertSettings(settings);
         abortExistingJob();
     }
 
@@ -138,15 +141,19 @@ public with sharing class AdminTrackSchedulerService {
         }
         status.put('scheduledJobs', scheduledJobs);
 
-        // ─── Recent processor runs (AdminAuditLog__c) ────────────────────────────
-        List<Map<String, Object>> processorRuns = new List<Map<String, Object>>();
-        for (AdminAuditLog__c log : [
+        // ─── Recent processor runs (AdminAuditLog__c) — FLS enforced via stripInaccessible
+        List<AdminAuditLog__c> rawLogs = [
             SELECT Id, BatchRunDate__c, WindowStart__c, WindowEnd__c,
                    TotalChanges__c, ExcludedCount__c, SentToSlack__c
             FROM AdminAuditLog__c
             ORDER BY BatchRunDate__c DESC
             LIMIT 5
-        ]) {
+        ];
+        List<AdminAuditLog__c> accessibleLogs = (List<AdminAuditLog__c>)
+            Security.stripInaccessible(AccessType.READABLE, rawLogs).getRecords();
+
+        List<Map<String, Object>> processorRuns = new List<Map<String, Object>>();
+        for (AdminAuditLog__c log : accessibleLogs) {
             processorRuns.add(new Map<String, Object>{
                 'id'       => log.Id,
                 'runDate'  => log.BatchRunDate__c != null
@@ -202,7 +209,7 @@ public with sharing class AdminTrackSchedulerService {
         settings.SlackMaxDetails__c      = (slackMaxDetails != null && slackMaxDetails > 0)
                                             ? Math.min(slackMaxDetails, 2000)
                                             : 25;
-        upsert settings;
+        upsertSettings(settings);
 
         if (slackEnabled == true && SlackNotificationService.isValidWebhookUrl(slackWebhookUrl)) {
             SlackNotificationService.sendConfirmationAsync(slackWebhookUrl);
@@ -210,6 +217,26 @@ public with sharing class AdminTrackSchedulerService {
     }
 
     // ─── Internal Helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Enforces CRUD before upserting AdminTrackSettings__c.
+     * New records require isCreateable(); existing records require isUpdateable().
+     * Throws AuraHandledException if the running user lacks the necessary permission.
+     */
+    private static void upsertSettings(AdminTrackSettings__c settings) {
+        if (settings.Id == null) {
+            if (!Schema.sObjectType.AdminTrackSettings__c.isCreateable()) {
+                throw new AuraHandledException(
+                    'Insufficient permissions: create access required on AdminTrackSettings__c.');
+            }
+        } else {
+            if (!Schema.sObjectType.AdminTrackSettings__c.isUpdateable()) {
+                throw new AuraHandledException(
+                    'Insufficient permissions: update access required on AdminTrackSettings__c.');
+            }
+        }
+        upsert settings;
+    }
 
     /**
      * Aborts any pending AdminTrack scheduled batch jobs.
