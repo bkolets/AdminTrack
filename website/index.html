@@ -83,6 +83,19 @@
             color: white;
             font-size: 16px;
         }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        .nav-link {
+            font-size: .875rem;
+            font-weight: 500;
+            color: var(--text-mid);
+            text-decoration: none;
+            transition: color .15s;
+        }
+        .nav-link:hover { color: var(--blue); }
         .nav-cta {
             background: var(--blue);
             color: white;
@@ -396,9 +409,12 @@
                 <div class="nav-logo-icon">🔍</div>
                 AdminTrack
             </a>
-            <a href="https://appexchange.salesforce.com" class="nav-cta" target="_blank" rel="noopener">
-                Get on AppExchange
-            </a>
+            <div class="nav-links">
+                <a href="/setup" class="nav-link">Setup Guide</a>
+                <a href="https://appexchange.salesforce.com" class="nav-cta" target="_blank" rel="noopener">
+                    Get on AppExchange
+                </a>
+            </div>
         </div>
     </nav>
 
